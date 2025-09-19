@@ -61,6 +61,7 @@ public class Dental3DScannerDetectorDeepCrawling_Timer {
     private static final int THREAD_POOL_SIZE = 10;
     private static final int MAX_PAGES_PER_SITE = 25; // 사이트당 최대 25페이지
     private static final int DELAY_BETWEEN_PAGES_MS = 200; // 페이지간 0.2초 대기
+    private static final int MAX_TIMEOUT_RETRIES = 3; // Read timeout 최대 3번까지 허용
 
     // 진행률 알림 간격 (밀리초)
     private static final long PROGRESS_REPORT_INTERVAL_MS = 5 * 60 * 1000; // 5분마다
@@ -224,6 +225,7 @@ public class Dental3DScannerDetectorDeepCrawling_Timer {
             pagesToVisit.offer(baseUrl);
 
             int pageCount = 0;
+            int timeoutCount = 0; // Read timeout 카운터 추가
             while (!pagesToVisit.isEmpty() && pageCount < MAX_PAGES_PER_SITE) {
                 String currentUrl = pagesToVisit.poll();
 
@@ -261,8 +263,24 @@ public class Dental3DScannerDetectorDeepCrawling_Timer {
                     Thread.sleep(DELAY_BETWEEN_PAGES_MS);
 
                 } catch (Exception e) {
-                    // 개별 페이지 오류는 무시하고 계속 진행
-                    continue;
+                    // 오류 상세 출력
+                    System.err.printf("   [DEBUG] 페이지 오류 [%s]: %s\n", currentUrl, e.getMessage());
+
+                    // Read timeout 체크
+                    if (e.getMessage() != null && e.getMessage().contains("Read timed out")) {
+                        timeoutCount++;
+                        if (timeoutCount >= MAX_TIMEOUT_RETRIES) {
+                            System.err.printf("   [ERROR] Read timeout %d회 초과, 해당 치과 처리 중단\n", MAX_TIMEOUT_RETRIES);
+                            throw new RuntimeException("연속 Read timeout 초과: " + timeoutCount + "회", e);
+                        }
+                    }
+
+                    // 첫 번째 페이지(메인 페이지) 오류는 전체 실패로 처리
+                    if (pageCount == 1) {
+                        throw new RuntimeException("메인 페이지 접근 실패: " + e.getMessage(), e);
+                    }
+
+                    continue; // 서브 페이지 오류만 무시
                 }
             }
 
