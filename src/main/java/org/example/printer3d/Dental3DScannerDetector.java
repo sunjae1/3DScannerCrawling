@@ -55,14 +55,14 @@ public class Dental3DScannerDetector {
     public List<Detection3DResult> scanAllDentalsFor3D(List<DentalInfo> dentalList) {
         List<Detection3DResult> results = new ArrayList<>();
 
-        System.out.println("🔍 3D 스캐너 검사 시작...\n");
+        System.out.println("🔍 3D 스캐너 검사 시작 (싱글 스레드)...\n");
 
         for (int i = 0; i < dentalList.size(); i++) {
             DentalInfo dental = dentalList.get(i);
 
             System.out.printf("[%d/%d] 🔍 검사: %s\n", i+1, dentalList.size(), dental.getName());
 
-            Detection3DResult result = detectSingle3DPrinter(dental);
+            Detection3DResult result = detectSingle3DScanner(dental);
             results.add(result);
 
             // 결과 즉시 출력
@@ -83,7 +83,7 @@ public class Dental3DScannerDetector {
     /**
      * 개별 치과의 3D 스캐너 보유 여부를 검사합니다.
      */
-    public Detection3DResult detectSingle3DPrinter(DentalInfo dental) {
+    public Detection3DResult detectSingle3DScanner(DentalInfo dental) {
         Detection3DResult result = new Detection3DResult(dental.getName(), dental.getWebsite(), dental.getEmail());
 
         // 웹사이트 정보가 없는 경우
@@ -91,6 +91,7 @@ public class Dental3DScannerDetector {
             result.setHas3DPrinter(false);
             result.setConfidenceLevel("NONE");
             result.setReason("웹사이트 정보 없음");
+            result.setErrorMessage(""); // 오류는 아니므로 빈 문자열
             return result;
         }
 
@@ -110,7 +111,7 @@ public class Dental3DScannerDetector {
             result.setHas3DPrinter(false);
             result.setConfidenceLevel("ERROR");
             result.setReason("크롤링 오류: " + e.getMessage());
-            
+            result.setErrorMessage(e.getMessage()); // 🔥 오류 메시지 저장
         }
 
         return result;
@@ -129,7 +130,7 @@ public class Dental3DScannerDetector {
         // 3D 스캐너 직접 언급 (가장 중요)
         if (!found3D.isEmpty()) {
             score += found3D.size() * 15;
-            evidence.append("🖨️ 3D스캐너: ").append(String.join(", ", found3D)).append(" | ");
+            evidence.append("📱 3D스캐너: ").append(String.join(", ", found3D)).append(" | ");
         }
 
         // 디지털 치과 키워드 (보조 지표)
@@ -156,6 +157,8 @@ public class Dental3DScannerDetector {
         result.setScore(score);
         result.setEvidence(evidence.toString());
         result.setReason(evidence.length() > 0 ? evidence.toString() : "3D 관련 정보 없음");
+        // 🔥 성공한 경우 오류 메시지는 빈 문자열
+        result.setErrorMessage("");
     }
 
     /**
@@ -181,6 +184,11 @@ public class Dental3DScannerDetector {
             System.out.printf("   증거: %s\n", result.getEvidence());
         } else {
             System.out.printf("❌ 3D스캐너 없음 (%s)\n", result.getReason());
+
+            // 🔥 오류가 있는 경우 오류 메시지도 출력
+            if ("ERROR".equals(result.getConfidenceLevel()) && !result.getErrorMessage().isEmpty()) {
+                System.out.printf("   오류: %s\n", result.getErrorMessage());
+            }
         }
         System.out.println();
     }
@@ -192,16 +200,23 @@ public class Dental3DScannerDetector {
         long high = results.stream().filter(r -> "HIGH".equals(r.getConfidenceLevel())).count();
         long medium = results.stream().filter(r -> "MEDIUM".equals(r.getConfidenceLevel())).count();
         long low = results.stream().filter(r -> "LOW".equals(r.getConfidenceLevel())).count();
+        long error = results.stream().filter(r -> "ERROR".equals(r.getConfidenceLevel())).count(); // 🔥 오류 개수 추가
         long total3D = high + medium + low;
 
-        System.out.println("═".repeat(50));
-        System.out.println("🎉 3D 스캐너 검사 완료!");
+        System.out.println("═".repeat(60));
+        System.out.println("🎉 3D 스캐너 검사 완료! (싱글 스레드)");
         System.out.printf("📊 전체 검사: %d개 치과\n", results.size());
-        System.out.printf("🖨️ 3D스캐너 보유 추정: %d개 (%.1f%%)\n", total3D, (double)total3D/results.size()*100);
+        System.out.printf("📱 3D스캐너 보유 추정: %d개 (%.1f%%)\n", total3D, (double)total3D/results.size()*100);
         System.out.printf("   - 높은 신뢰도: %d개\n", high);
         System.out.printf("   - 중간 신뢰도: %d개\n", medium);
         System.out.printf("   - 낮은 신뢰도: %d개\n", low);
-        System.out.println("═".repeat(50));
+
+        // 🔥 오류 개수가 있으면 표시
+        if (error > 0) {
+            System.out.printf("   - 처리 오류: %d개\n", error);
+        }
+
+        System.out.println("═".repeat(60));
     }
 
     /**

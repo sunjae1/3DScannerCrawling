@@ -34,9 +34,8 @@ public class Dental3DScannerDetectorMultiThread {
     private static final String[] DIGITAL_KEYWORDS = {
             "디지털치과", "디지털 치과", "digital dentistry",
             "스마트치과", "첨단장비", "최신장비", "하이테크",
-            "디지털임플란트", "원데이", "당일", "즉시", "빠른진료",
-            "무인상", "인상없이", "편안한치료", "정밀진단",
-            "cad/cam", "캐드캠", "cadcam", "워크플로우"
+            "디지털임플란트", "무인상", "인상없이", "편안한치료",
+            "정밀진단", "cad/cam", "캐드캠", "cadcam", "워크플로우"
     };
 
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
@@ -47,7 +46,6 @@ public class Dental3DScannerDetectorMultiThread {
     // 스레드 안전한 카운터
     private final AtomicInteger processedCount = new AtomicInteger(0);
     private final AtomicInteger totalCount = new AtomicInteger(0);
-
     /**
      * 모든 치과의 3D 스캐너 보유 여부를 멀티스레드로 검사합니다.
      */
@@ -73,7 +71,7 @@ public class Dental3DScannerDetectorMultiThread {
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
                 try {
                     // 스레드별 요청 간격 조절
-                    Thread.sleep(DELAY_BETWEEN_REQUESTS_MS * (index % THREAD_POOL_SIZE));
+//                    Thread.sleep(DELAY_BETWEEN_REQUESTS_MS * (index % THREAD_POOL_SIZE));
 
                     Detection3DResult result = detectSingle3DScanner(dental);
                     resultsArray[index] = result;
@@ -82,10 +80,8 @@ public class Dental3DScannerDetectorMultiThread {
                     int currentProgress = processedCount.incrementAndGet();
                     printProgress(currentProgress, totalCount.get(), dental.getName(), result);
 
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    System.err.println("❌ 스레드 중단: " + dental.getName());
-                } catch (Exception e) {
+                }
+                catch (Exception e) {
                     System.err.println("❌ 처리 오류 [" + dental.getName() + "]: " + e.getMessage());
                     resultsArray[index] = createErrorResult(dental, e.getMessage());
                     processedCount.incrementAndGet();
@@ -142,6 +138,7 @@ public class Dental3DScannerDetectorMultiThread {
             result.setHas3DPrinter(false); // 필드명은 그대로 유지
             result.setConfidenceLevel("NONE");
             result.setReason("웹사이트 정보 없음");
+            result.setErrorMessage(""); // 오류는 아니므로 빈 문자열
             return result;
         }
 
@@ -157,10 +154,13 @@ public class Dental3DScannerDetectorMultiThread {
             // 키워드 검색 및 점수 계산
             calculateDetectionScore(result, fullText);
 
+            Thread.sleep(DELAY_BETWEEN_REQUESTS_MS);
+
         } catch (Exception e) {
             result.setHas3DPrinter(false);
             result.setConfidenceLevel("ERROR");
             result.setReason("크롤링 오류: " + e.getMessage());
+            result.setErrorMessage(e.getMessage()); // 오류 메시지 저장
         }
 
         return result;
@@ -206,6 +206,8 @@ public class Dental3DScannerDetectorMultiThread {
         result.setScore(score);
         result.setEvidence(evidence.toString());
         result.setReason(evidence.length() > 0 ? evidence.toString() : "3D 관련 정보 없음");
+        // 성공한 경우 오류 메시지는 비움
+        result.setErrorMessage("");
     }
 
     /**
@@ -229,6 +231,7 @@ public class Dental3DScannerDetectorMultiThread {
         result.setHas3DPrinter(false);
         result.setConfidenceLevel("ERROR");
         result.setReason("처리 오류: " + errorMessage);
+        result.setErrorMessage(errorMessage); // 오류 메시지 저장
         return result;
     }
 

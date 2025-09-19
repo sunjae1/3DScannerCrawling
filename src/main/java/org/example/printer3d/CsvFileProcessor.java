@@ -59,17 +59,19 @@ public class CsvFileProcessor {
     public void save3DResultsToCsv(List<Detection3DResult> results, String outputPath) throws Exception {
         try (FileWriter writer = new FileWriter(outputPath, StandardCharsets.UTF_8)) {
             writer.write('\ufeff'); // UTF-8 BOM 추가 (Excel 호환)
-            writer.write("치과명,웹사이트,이메일,3D스캐너보유,신뢰도,점수,증거\n");
+            // 🔥 오류메시지 컬럼 추가
+            writer.write("치과명,웹사이트,이메일,3D스캐너보유,신뢰도,점수,증거,오류메시지\n");
 
             for (Detection3DResult result : results) {
-                writer.write(String.format("%s,%s,%s,%s,%s,%d,\"%s\"\n",
+                writer.write(String.format("%s,%s,%s,%s,%s,%d,\"%s\",\"%s\"\n",
                         escapeCsv(result.getDentalName()),
                         escapeCsv(result.getWebsite()),
                         escapeCsv(result.getEmail()),
                         result.isHas3DPrinter() ? "예" : "아니오",
                         result.getConfidenceLevel(),
                         result.getScore(),
-                        result.getEvidence().replace("\"", "\"\"")));
+                        result.getEvidence().replace("\"", "\"\""),
+                        result.getErrorMessage().replace("\"", "\"\""))); // 🔥 오류메시지 추가
             }
         }
 

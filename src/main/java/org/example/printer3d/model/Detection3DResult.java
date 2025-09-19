@@ -9,6 +9,7 @@ public class Detection3DResult {
     private int score;
     private String evidence;
     private String reason;
+    private String errorMessage; // 🔥 오류 메시지 필드 추가
 
     public Detection3DResult(String dentalName, String website, String email) {
         this.dentalName = dentalName;
@@ -19,6 +20,7 @@ public class Detection3DResult {
         this.score = 0;
         this.evidence = "";
         this.reason = "";
+        this.errorMessage = ""; // 기본값 빈 문자열
     }
 
     // Getters
@@ -30,6 +32,7 @@ public class Detection3DResult {
     public int getScore() { return score; }
     public String getEvidence() { return evidence; }
     public String getReason() { return reason; }
+    public String getErrorMessage() { return errorMessage; } // 🔥 getter 추가
 
     // Setters
     public void setDentalName(String dentalName) { this.dentalName = dentalName; }
@@ -40,10 +43,11 @@ public class Detection3DResult {
     public void setScore(int score) { this.score = score; }
     public void setEvidence(String evidence) { this.evidence = evidence; }
     public void setReason(String reason) { this.reason = reason; }
+    public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; } // 🔥 setter 추가
 
     @Override
     public String toString() {
-        return String.format("Detection3DResult{dentalName='%s', has3DPrinter=%s, confidenceLevel='%s', score=%d}",
-                dentalName, has3DPrinter, confidenceLevel, score);
+        return String.format("Detection3DResult{dentalName='%s', has3DPrinter=%s, confidenceLevel='%s', score=%d, errorMessage='%s'}",
+                dentalName, has3DPrinter, confidenceLevel, score, errorMessage);
     }
 }

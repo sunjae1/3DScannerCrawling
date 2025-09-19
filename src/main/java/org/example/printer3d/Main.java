@@ -37,7 +37,7 @@ public class Main {
             System.out.printf("📊 총 %d개 치과 정보 로드 완료\n", dentalList.size());
 
             // 3D 스캐너 검출기 생성 및 실행
-            Dental3DScannerDetector detector = new Dental3DScannerDetector();
+            Dental3DScannerDetectorDeepCrawling_Multi detector = new Dental3DScannerDetectorDeepCrawling_Multi();
             List<Detection3DResult> results = detector.scanAllDentalsFor3D(dentalList);
 
             // 결과 저장
