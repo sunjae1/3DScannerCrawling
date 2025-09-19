@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 
 //3D 스캐너 찾는 딥 크롤링_멀티 스레드
-public class Dental3DScannerDetectorDeepCrawling_Multi {
+public class Dental3DScannerDetectorDeepCrawling_Timer {
     // 3D 스캐너 관련 키워드들
     private static final String[] SCANNER_3D_KEYWORDS = {
             "3d스캐너", "3d 스캐너", "3d scanning", "3d스캐닝", "3d 스캐닝",
@@ -62,18 +62,34 @@ public class Dental3DScannerDetectorDeepCrawling_Multi {
     private static final int MAX_PAGES_PER_SITE = 25; // 사이트당 최대 25페이지
     private static final int DELAY_BETWEEN_PAGES_MS = 200; // 페이지간 0.2초 대기
 
+    // 진행률 알림 간격 (밀리초)
+    private static final long PROGRESS_REPORT_INTERVAL_MS = 5 * 60 * 1000; // 5분마다
+
     // 스레드 안전한 카운터
     private final AtomicInteger processedCount = new AtomicInteger(0);
     private final AtomicInteger totalCount = new AtomicInteger(0);
+
+    // 진행률 타이머용
+    private volatile boolean isRunning = false;
+    private long startTime;
 
     /**
      * 모든 치과의 3D 스캐너 보유 여부를 멀티스레드 딥 크롤링으로 검사합니다.
      */
     public List<Detection3DResult> scanAllDentalsFor3D(List<DentalInfo> dentalList) {
+        startTime = System.currentTimeMillis(); // 시작 시간 기록
         totalCount.set(dentalList.size());
         processedCount.set(0);
+        isRunning = true;
 
         System.out.println("🕷️ 3D 스캐너 딥 크롤링 시작 (멀티스레드: " + THREAD_POOL_SIZE + "개)...\n");
+
+        // 진행률 타이머 시작
+        ScheduledExecutorService progressTimer = Executors.newSingleThreadScheduledExecutor();
+        progressTimer.scheduleAtFixedRate(this::reportProgress,
+                PROGRESS_REPORT_INTERVAL_MS / 1000, // 첫 보고는 5분 후
+                PROGRESS_REPORT_INTERVAL_MS / 1000, // 이후 5분마다
+                TimeUnit.SECONDS);
 
         // 스레드풀 생성
         ExecutorService executor = Executors.newFixedThreadPool(THREAD_POOL_SIZE);
@@ -118,6 +134,9 @@ public class Dental3DScannerDetectorDeepCrawling_Multi {
         } catch (Exception e) {
             System.err.println("❌ 멀티스레드 처리 중 오류: " + e.getMessage());
         } finally {
+            isRunning = false;
+            progressTimer.shutdown(); // 진행률 타이머 종료
+
             executor.shutdown();
             try {
                 if (!executor.awaitTermination(60, TimeUnit.SECONDS)) {
@@ -137,10 +156,48 @@ public class Dental3DScannerDetectorDeepCrawling_Multi {
             }
         }
 
+        long endTime = System.currentTimeMillis();
+        long totalDuration = endTime - startTime;
         // 최종 요약 출력
-        printFinalSummary(results);
+        printFinalSummary(results, totalDuration);
 
         return results;
+    }
+
+    /**
+     * 주기적 진행률 보고
+     */
+    private void reportProgress() {
+        if (!isRunning) return;
+
+        long currentTime = System.currentTimeMillis();
+        long elapsedTime = currentTime - startTime;
+        int processed = processedCount.get();
+        int total = totalCount.get();
+
+        // 경과 시간 계산
+        long elapsedHours = elapsedTime / (1000 * 60 * 60);
+        long elapsedMinutes = (elapsedTime % (1000 * 60 * 60)) / (1000 * 60);
+
+        // 진행률 계산
+        double progressPercent = (double) processed / total * 100;
+
+        // 예상 완료 시간 계산
+        if (processed > 0) {
+            long avgTimePerItem = elapsedTime / processed;
+            long remainingItems = total - processed;
+            long estimatedRemainingTime = avgTimePerItem * remainingItems;
+
+            long remainingHours = estimatedRemainingTime / (1000 * 60 * 60);
+            long remainingMinutes = (estimatedRemainingTime % (1000 * 60 * 60)) / (1000 * 60);
+
+            System.out.println("\n" + "=".repeat(60));
+            System.out.printf("📊 [진행률 보고] %d시간 %d분 경과\n", elapsedHours, elapsedMinutes);
+            System.out.printf("✅ 진행: %d/%d (%.1f%%) 완료\n", processed, total, progressPercent);
+            System.out.printf("⏱️ 예상 완료까지: %d시간 %d분 남음\n", remainingHours, remainingMinutes);
+            System.out.printf("⚡ 현재 처리속도: %.1f개/분\n", (double) processed / (elapsedTime / 60000.0));
+            System.out.println("=".repeat(60) + "\n");
+        }
     }
 
     /**
@@ -392,7 +449,7 @@ public class Dental3DScannerDetectorDeepCrawling_Multi {
                     result.getConfidenceLevel(), result.getScore());
         } else {
             if ("ERROR".equals(result.getConfidenceLevel())) {
-                System.out.printf("❌ 크롤링 오류 (%s)\n", result.getErrorMessage());
+                System.out.printf("❌ 크롤링 오류\n", result.getErrorMessage());
             } else {
                 System.out.printf("❌ 3D스캐너 없음\n");
             }
@@ -402,12 +459,16 @@ public class Dental3DScannerDetectorDeepCrawling_Multi {
     /**
      * 최종 요약을 출력합니다.
      */
-    private void printFinalSummary(List<Detection3DResult> results) {
+    private void printFinalSummary(List<Detection3DResult> results, long totalDurationMs) {
         long high = results.stream().filter(r -> "HIGH".equals(r.getConfidenceLevel())).count();
         long medium = results.stream().filter(r -> "MEDIUM".equals(r.getConfidenceLevel())).count();
         long low = results.stream().filter(r -> "LOW".equals(r.getConfidenceLevel())).count();
         long error = results.stream().filter(r -> "ERROR".equals(r.getConfidenceLevel())).count();
         long total3D = high + medium + low;
+
+        long hours = totalDurationMs / 3600000;
+        long minutes = totalDurationMs % 3600000 / 60000;
+        long seconds = totalDurationMs % 60000 / 1000;
 
         System.out.println("\n" + "═".repeat(60));
         System.out.println("🎉 3D 스캐너 딥 크롤링 완료! (멀티스레드 " + THREAD_POOL_SIZE + "개)");
@@ -419,6 +480,9 @@ public class Dental3DScannerDetectorDeepCrawling_Multi {
         if (error > 0) {
             System.out.printf("   - 처리 오류: %d개\n", error);
         }
+        System.out.printf("⏱️ 총 소요시간: %d시간 %d분 %d초\n", hours, minutes, seconds);
+        System.out.printf("⚡ 평균 처리속도: %.1f개/분\n", (double)results.size() / (totalDurationMs / 60000.0));
         System.out.println("═".repeat(60));
     }
+
 }

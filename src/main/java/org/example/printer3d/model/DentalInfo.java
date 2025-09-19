@@ -1,5 +1,6 @@
 package org.example.printer3d.model;
 
+
 public class DentalInfo {
     private String name;
     private String website;

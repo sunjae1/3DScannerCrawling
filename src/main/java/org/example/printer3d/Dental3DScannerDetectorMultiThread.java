@@ -36,6 +36,7 @@ public class Dental3DScannerDetectorMultiThread {
             "스마트치과", "첨단장비", "최신장비", "하이테크",
             "디지털임플란트", "무인상", "인상없이", "편안한치료",
             "정밀진단", "cad/cam", "캐드캠", "cadcam", "워크플로우"
+            ,"CAD","CAD cam"
     };
 
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
