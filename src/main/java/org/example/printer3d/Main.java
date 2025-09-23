@@ -24,7 +24,7 @@ public class Main {
             }
 
             // CSV 파일 처리기 생성
-            CsvFileProcessor csvProcessor = new CsvFileProcessor();
+            CsvFileProcessor_Temp csvProcessor = new CsvFileProcessor_Temp();
 
             // 치과 정보 로드
             List<DentalInfo> dentalList = csvProcessor.loadDentalInfoFromCsv(csvPath);
@@ -37,7 +37,7 @@ public class Main {
             System.out.printf("📊 총 %d개 치과 정보 로드 완료\n", dentalList.size());
 
             // 3D 스캐너 검출기 생성 및 실행
-            Dental3DScannerDetectorDeepCrawling_Timer detector = new Dental3DScannerDetectorDeepCrawling_Timer();
+            Dental3DScannerDetectorDeepCrawling_Timer_Temp detector = new Dental3DScannerDetectorDeepCrawling_Timer_Temp();
             List<Detection3DResult> results = detector.scanAllDentalsFor3D(dentalList);
 
             // 결과 저장
