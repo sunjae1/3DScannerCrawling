@@ -2,6 +2,7 @@ package org.example.printer3d;
 
 import org.example.printer3d.model.DentalInfo;
 import org.example.printer3d.model.Detection3DResult;
+import org.example.printer3d.model.UrlWithDepth;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -14,8 +15,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 
 //3D 스캐너 찾는 딥 크롤링_멀티 스레드
-public class Dental3DScannerDetectorDeepCrawling_Timer {
-    // 3D 스캐너 관련 키워드들(직접 키워드 : 존재)
+public class Dental3DScannerDetector_Full_SiteCrawling {
+    // 3D 스캐너 관련 키워드들
     private static final String[] SCANNER_3D_KEYWORDS = {
             "3d스캐너", "3d 스캐너", "3d scanning", "3d스캐닝", "3d 스캐닝",
             "쓰리디스캐너", "쓰리디 스캐너", "삼차원 스캐너",
@@ -34,16 +35,13 @@ public class Dental3DScannerDetectorDeepCrawling_Timer {
             "구강내 스캐너", "인상채득", "impression", "석고모형", "plaster model"
     };
 
-    // 디지털 치과 키워드(간접 키워드 : 애매함)
+    // 디지털 치과 키워드
     private static final String[] DIGITAL_KEYWORDS = {
             "디지털치과", "디지털 치과", "digital dentistry",
             "스마트치과", "첨단장비", "최신장비", "하이테크",
             "디지털임플란트", "무인상", "인상없이", "편안한치료",
             "정밀진단", "cad/cam", "캐드캠", "cadcam", "워크플로우"
     };
-
-
-
 
     // 우선순위 높은 페이지 키워드
     private static final String[] PRIORITY_PAGE_KEYWORDS = {
@@ -65,6 +63,8 @@ public class Dental3DScannerDetectorDeepCrawling_Timer {
     private static final int MAX_PAGES_PER_SITE = 25; // 사이트당 최대 25페이지
     private static final int DELAY_BETWEEN_PAGES_MS = 200; // 페이지간 0.2초 대기
     private static final int MAX_TIMEOUT_RETRIES = 3; // Read timeout 최대 3번까지 허용
+    //수정
+    private static final int MAX_DEPTH = 5;
 
     // 진행률 알림 간격 (밀리초)
     private static final long PROGRESS_REPORT_INTERVAL_MS = 5 * 60 * 1000; // 5분마다
@@ -219,18 +219,24 @@ public class Dental3DScannerDetectorDeepCrawling_Timer {
         }
 
         Set<String> visitedPages = ConcurrentHashMap.newKeySet();
-        Queue<String> pagesToVisit = new LinkedList<>();
+        Queue<UrlWithDepth> pagesToVisit = new LinkedList<>();
         StringBuilder allText = new StringBuilder();
         List<String> foundEvidence = new ArrayList<>();
 
         try {
+
             String baseUrl = dental.getWebsite().trim();
-            pagesToVisit.offer(baseUrl);
+            pagesToVisit.offer(new UrlWithDepth(baseUrl, 0));
+
 
             int pageCount = 0;
             int timeoutCount = 0; // Read timeout 카운터 추가
-            while (!pagesToVisit.isEmpty() && pageCount < MAX_PAGES_PER_SITE) {
-                String currentUrl = pagesToVisit.poll();
+            while (!pagesToVisit.isEmpty()) {
+
+//                String currentUrl = pagesToVisit.poll();
+                UrlWithDepth urlWithDepth = pagesToVisit.poll();
+                String currentUrl = urlWithDepth.getUrl();
+                int currentDepth = urlWithDepth.getDepth();
 
                 if (visitedPages.contains(currentUrl)) {
                     continue;
@@ -257,15 +263,14 @@ public class Dental3DScannerDetectorDeepCrawling_Timer {
                                 getPageTitle(doc), String.join(", ", foundKeywords)));
                     }
 
-                    // 첫 번째 페이지에서만 링크 수집
-                    if (pageCount == 1) {
-                        collectInternalLinks(doc, baseUrl, pagesToVisit, visitedPages);
-                    }
+                    // 심층 크롤링.
+                        collectInternalLinks(doc, baseUrl, pagesToVisit, visitedPages, currentDepth);
 
                     // 페이지간 딜레이
                     Thread.sleep(DELAY_BETWEEN_PAGES_MS);
 
                 } catch (Exception e) {
+
                     // 오류 상세 출력
                     System.err.printf("   [DEBUG] 페이지 오류 [%s]: %s\n", currentUrl, e.getMessage());
 
@@ -303,8 +308,11 @@ public class Dental3DScannerDetectorDeepCrawling_Timer {
     /**
      * 내부 링크 수집 (우선순위 기반)
      */
-    private void collectInternalLinks(Document doc, String baseUrl, Queue<String> pagesToVisit, Set<String> visitedPages) {
+    private void collectInternalLinks(Document doc, String baseUrl, Queue<UrlWithDepth> pagesToVisit, Set<String> visitedPages, int currentDepth) {
         try {
+
+            if (currentDepth >= MAX_DEPTH) return; //깊이제한.
+
             URL base = new URL(baseUrl);
             String baseDomain = base.getHost();
 
@@ -352,7 +360,7 @@ public class Dental3DScannerDetectorDeepCrawling_Timer {
             linkPriorities.entrySet().stream()
                     .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
                     .limit(MAX_PAGES_PER_SITE - 1) // 메인페이지 제외
-                    .forEach(entry -> pagesToVisit.offer(entry.getKey()));
+                    .forEach(entry -> pagesToVisit.offer(new UrlWithDepth(entry.getKey(), currentDepth +1)));
 
         } catch (Exception e) {
             // 링크 수집 오류는 무시
