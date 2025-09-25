@@ -24,7 +24,7 @@ public class Main {
             }
 
             // CSV 파일 처리기 생성
-            CsvFileProcessor_Temp csvProcessor = new CsvFileProcessor_Temp();
+            CsvFileProcessor_Email csvProcessor = new CsvFileProcessor_Email();
 
             // 치과 정보 로드
             List<DentalInfo> dentalList = csvProcessor.loadDentalInfoFromCsv(csvPath);

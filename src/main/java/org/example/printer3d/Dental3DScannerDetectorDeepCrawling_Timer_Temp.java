@@ -34,13 +34,13 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
             "구강내 스캐너", "인상채득", "impression", "석고모형", "plaster model"
     };
 
-    // 디지털 치과 키워드(간접 키워드 : 애매함)
+/*    // 디지털 치과 키워드(간접 키워드 : 애매함)
     private static final String[] DIGITAL_KEYWORDS = {
             "디지털치과", "디지털 치과", "digital dentistry",
             "스마트치과", "첨단장비", "최신장비", "하이테크",
             "디지털임플란트", "무인상", "인상없이", "편안한치료",
             "정밀진단", "cad/cam", "캐드캠", "cadcam", "워크플로우"
-    };
+    };*/
 
     // 우선순위 높은 페이지 키워드
     private static final String[] PRIORITY_PAGE_KEYWORDS = {
@@ -60,7 +60,7 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
     private static final int TIMEOUT_MS = 10000;
     private static final int THREAD_POOL_SIZE = 10;
     private static final int MAX_PAGES_PER_SITE = 25; // 사이트당 최대 25페이지
-    private static final int DELAY_BETWEEN_PAGES_MS = 200; // 페이지간 0.2초 대기
+    private static final int DELAY_BETWEEN_PAGES_MS = 1000; // 페이지간 1초 대기
     private static final int MAX_TIMEOUT_RETRIES = 3; // Read timeout 최대 3번까지 허용
 
     // 진행률 알림 간격 (밀리초)
@@ -220,7 +220,10 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
         Queue<String> pagesToVisit = new LinkedList<>();
         StringBuilder allText = new StringBuilder();
         List<String> foundEvidence = new ArrayList<>();
-        String firstFoundWebsite = ""; // 처음으로 키워드가 발견된 웹사이트 저장
+//        String firstFoundWebsite = ""; // 처음으로 키워드가 발견된 웹사이트 저장
+        List<String> foundWebsites = new ArrayList<>(); // 키워드가 발견된 모든 웹사이트 저장
+        
+        
 
         try {
             String baseUrl = dental.getWebsite().trim();
@@ -255,20 +258,22 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
                         foundEvidence.add(String.format("페이지[%s]: %s",
                                 getPageTitle(doc), String.join(", ", foundKeywords)));
 
-                        // 처음 발견된 웹사이트 기록
-                        if (firstFoundWebsite.isEmpty()) {
-                            firstFoundWebsite = currentUrl;
+                        // 키워드가 발견된 웹사이트 추가 (중복 방지)
+                        if (!foundWebsites.contains(currentUrl)) {
+                            foundWebsites.add(currentUrl);
                         }
                     }
+/*
 
                     // 키워드 검사 - DIGITAL_KEYWORDS
                     List<String> foundDigitalKeywords = findMatchingKeywords(pageText, DIGITAL_KEYWORDS);
                     if (!foundDigitalKeywords.isEmpty()) {
                         // DIGITAL_KEYWORDS만 발견된 경우에도 웹사이트 기록 (SCANNER_3D_KEYWORDS가 없을 때만)
-                        if (firstFoundWebsite.isEmpty() && foundKeywords.isEmpty()) {
-                            firstFoundWebsite = currentUrl;
+                        if (!foundWebsites.contains(currentUrl)) {
+                            foundWebsites.add(currentUrl);
                         }
                     }
+*/
 
 
                     // 첫 번째 페이지에서만 링크 수집
@@ -280,7 +285,15 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
                     Thread.sleep(DELAY_BETWEEN_PAGES_MS);
 
                 } catch (Exception e) {
-                    // 오류 상세 출력
+                    //429 Too Many Requests 에러 처리
+                    if (e.getMessage() != null && e.getMessage().contains("429")) {
+                        System.err.printf("   [429 ERROR] Rate limit 감지 [%s], 5초 대기 중...\n", currentUrl);
+                        Thread.sleep(5000); // 5초 대기
+                        continue; // 해당 페이지 재시도 없이 다음으로
+                    }
+
+
+                    // 오류 상세 출력(기존 오류 처리)
                     System.err.printf("   [DEBUG] 페이지 오류 [%s]: %s\n", currentUrl, e.getMessage());
 
                     // Read timeout 체크
@@ -302,7 +315,7 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
             }
 
             // 최종 점수 계산
-            calculateDeepScanScore(result, allText.toString(), foundEvidence, pageCount, firstFoundWebsite);
+            calculateDeepScanScore(result, allText.toString(), foundEvidence, pageCount, foundWebsites);
 
         } catch (Exception e) {
             result.setHas3DPrinter(false);
@@ -331,9 +344,9 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
                 String linkText = link.text().toLowerCase();
 
                 //이미지/문서 파일 제외.
-                if(linkText.endsWith(".jpg") || linkText.endsWith(".jpeg") ||
-                        linkText.endsWith(".png") || linkText.endsWith(".gif") ||
-                        linkText.endsWith(".pdf") || linkText.endsWith(".doc") || linkText.endsWith(".zip"))
+                if(href.endsWith(".jpg") || href.endsWith(".jpeg") ||
+                        href.endsWith(".png") || href.endsWith(".gif") ||
+                        href.endsWith(".pdf") || href.endsWith(".doc") || href.endsWith(".zip"))
                 {
                     continue;
                 }
@@ -401,9 +414,9 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
      * 딥 스캔 점수 계산 - foundWebsite 매개변수 추가
      */
     private void calculateDeepScanScore(Detection3DResult result, String allText,
-                                        List<String> evidenceList, int pageCount, String foundWebsite) {
+                                        List<String> evidenceList, int pageCount, List<String> foundWebsites) {
         List<String> foundKeywords = findMatchingKeywords(allText, SCANNER_3D_KEYWORDS);
-        List<String> foundDigital = findMatchingKeywords(allText, DIGITAL_KEYWORDS);
+//        List<String> foundDigital = findMatchingKeywords(allText, DIGITAL_KEYWORDS);
 
         int score = 0;
         StringBuilder evidence = new StringBuilder();
@@ -414,11 +427,13 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
             evidence.append("📱 3D스캐너: ").append(String.join(", ", foundKeywords)).append(" | ");
         }
 
+/*
         // 디지털 치과 키워드
         if (!foundDigital.isEmpty()) {
             score += foundDigital.size() * 4;
             evidence.append("💻 디지털: ").append(String.join(", ", foundDigital)).append(" | ");
         }
+*/
 
         // 페이지 다양성 보너스
         if (evidenceList.size() > 1) {
@@ -428,7 +443,7 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
         evidence.append("📄 검사 페이지: ").append(pageCount).append("개");
 
         // 신뢰도 판정 (딥 크롤링은 더 엄격하게)
-        if (score >= 20) {
+        if (score >= 12) {
             result.setHas3DPrinter(true);
             if (score >= 50) {
                 result.setConfidenceLevel("HIGH");
@@ -448,8 +463,8 @@ public class Dental3DScannerDetectorDeepCrawling_Timer_Temp {
                 String.format("3D 관련 정보 없음 (%d페이지 검사)", pageCount));
         result.setErrorMessage("");
 
-        // 찾은 웹사이트 설정
-        result.setFoundWebsite(foundWebsite.isEmpty() ? "" : foundWebsite);
+        // 수정됨
+        result.setFoundWebsite(foundWebsites.isEmpty() ? "" : String.join("; \n", foundWebsites));
     }
 
     /**
